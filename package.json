@@ -31,5 +31,8 @@
     "express"
   ],
   "author": "Energy Trading Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
 }

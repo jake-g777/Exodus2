@@ -16,12 +16,16 @@ let pool: oracledb.Pool | null = null;
 export async function initializeDatabase(): Promise<void> {
   try {
     // Skip database connection in development mode
-    if (process.env['NODE_ENV'] === 'development') {
+    const nodeEnv = process.env['NODE_ENV'] || 'development';
+    logger.info(`Current NODE_ENV: ${nodeEnv}`);
+    
+    if (nodeEnv === 'development') {
       logger.info('Running in development mode - skipping database connection');
       logger.info('Using mock data for development');
       return;
     }
 
+    logger.info('Attempting to create Oracle database pool...');
     // Create connection pool
     pool = await oracledb.createPool(dbConfig);
     logger.info('Oracle database pool created successfully');

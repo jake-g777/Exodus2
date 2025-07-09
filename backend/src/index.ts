@@ -112,8 +112,13 @@ app.use(errorHandler);
 // Initialize database and start server
 async function startServer() {
   try {
-    await initializeDatabase();
-    logger.info('Database initialized successfully');
+    // Skip database initialization in development mode
+    if (process.env['NODE_ENV'] === 'development') {
+      logger.info('Running in development mode - skipping database initialization');
+    } else {
+      await initializeDatabase();
+      logger.info('Database initialized successfully');
+    }
     
     setupWebSocket(io);
     logger.info('WebSocket setup completed');

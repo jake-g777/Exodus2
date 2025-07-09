@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { authApi } from '../services/authApi'
-import { User } from '../types'
+import { User, UserRole } from '../types'
 
 interface AuthState {
   user: User | null
@@ -9,18 +9,44 @@ interface AuthState {
   refreshToken: string | null
 }
 
+// Mock user data for development
+const mockUser: User = {
+  id: '1',
+  email: 'demo@exodus.com',
+  firstName: 'Demo',
+  lastName: 'User',
+  role: UserRole.TRADER,
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+}
+
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>(() => {
+    // In development mode, always return authenticated with mock data
+    if (import.meta.env.DEV) {
+      return { 
+        user: mockUser, 
+        accessToken: 'mock-token', 
+        refreshToken: 'mock-refresh-token' 
+      }
+    }
+    
     const stored = localStorage.getItem('auth')
     return stored ? JSON.parse(stored) : { user: null, accessToken: null, refreshToken: null }
   })
 
   const queryClient = useQueryClient()
 
-  // Check if user is authenticated
+  // In development mode, skip API calls
   const { data: user, isLoading } = useQuery(
     ['user', authState.accessToken],
-    () => authApi.getProfile(),
+    () => {
+      if (import.meta.env.DEV) {
+        return Promise.resolve(mockUser)
+      }
+      return authApi.getProfile()
+    },
     {
       enabled: !!authState.accessToken,
       retry: false,

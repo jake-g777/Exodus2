@@ -6,6 +6,10 @@ import Dashboard from './pages/Dashboard'
 import Trading from './pages/Trading'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import Projects from './pages/Projects'
+import Datamappings from './pages/Datamappings'
+import Notifications from './pages/Notifications'
+import Admin from './pages/Admin'
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -34,6 +38,10 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/trading" element={<Trading />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/datamappings" element={<Datamappings />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
