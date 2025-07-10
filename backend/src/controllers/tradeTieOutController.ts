@@ -136,16 +136,16 @@ export class TradeTieOutController {
           data: {
             tieOut: {
               tradeTieOutId,
-              tradeDate: tieOutRecord?.[1]?.toISOString().split('T')[0] || requestData.tradeDate,
-              sideAFileImport: tieOutRecord?.[2] || requestData.sideAFileImport,
-              sideAFileName: tieOutRecord?.[3] || requestData.sideAFileName,
-              sideBFileImport: tieOutRecord?.[4] || requestData.sideBFileImport,
-              sideBFileName: tieOutRecord?.[5] || requestData.sideBFileName,
-              userName: tieOutRecord?.[6] || requestData.userName,
-              systemTimestamp: tieOutRecord?.[7]?.toISOString() || new Date().toISOString(),
-              keyMatrix: JSON.parse(tieOutRecord?.[8] || '{}'),
-              createdDate: tieOutRecord?.[9]?.toISOString() || new Date().toISOString(),
-              modifiedDate: tieOutRecord?.[10]?.toISOString() || new Date().toISOString()
+              tradeDate: (tieOutRecord as any)?.[1]?.toISOString().split('T')[0] || requestData.tradeDate,
+              sideAFileImport: (tieOutRecord as any)?.[2] || requestData.sideAFileImport,
+              sideAFileName: (tieOutRecord as any)?.[3] || requestData.sideAFileName,
+              sideBFileImport: (tieOutRecord as any)?.[4] || requestData.sideBFileImport,
+              sideBFileName: (tieOutRecord as any)?.[5] || requestData.sideBFileName,
+              userName: (tieOutRecord as any)?.[6] || requestData.userName,
+              systemTimestamp: (tieOutRecord as any)?.[7]?.toISOString() || new Date().toISOString(),
+              keyMatrix: JSON.parse((tieOutRecord as any)?.[8] || '{}'),
+              createdDate: (tieOutRecord as any)?.[9]?.toISOString() || new Date().toISOString(),
+              modifiedDate: (tieOutRecord as any)?.[10]?.toISOString() || new Date().toISOString()
             },
             results
           },
@@ -211,7 +211,7 @@ export class TradeTieOutController {
           `SELECT * FROM V_TRADE_TIE_OUT_SUMMARY ORDER BY TRADE_DATE DESC, SYSTEM_TIMESTAMP DESC`
         );
         
-        const summaries: TradeTieOutSummary[] = (result.rows || []).map(row => ({
+        const summaries: TradeTieOutSummary[] = (result.rows || []).map((row: any) => ({
           tradeDate: row?.[0]?.toISOString().split('T')[0] || '',
           tieOutUser: row?.[1] || '',
           systemTimestamp: row?.[2]?.toISOString() || '',
@@ -285,7 +285,7 @@ export class TradeTieOutController {
           { tradeDate }
         );
         
-        const details: TradeDetails[] = (result.rows || []).map(row => ({
+        const details: TradeDetails[] = (result.rows || []).map((row: any) => ({
           tradeTieOutResultId: row?.[0] || '',
           tradeId: row?.[1] || '',
           product: row?.[2] || '',
