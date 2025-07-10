@@ -2,6 +2,8 @@ import { Search, Filter, Download, Upload, AlertTriangle, CheckCircle, Clock, Ac
 import { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import React from 'react'
+import { TradeTieOutApi } from '../services/tradeTieOutApi'
+import { TradeTieOutSummary, TradeDetails, CreateTradeTieOutRequest } from '../types'
 
 // Helper to convert Excel serial date to JS date string
 function excelDateToJSDate(serial: number) {
@@ -251,32 +253,36 @@ const tradeDays = [
   }
 ]
 
-// Parent DTO
+// Parent DTO - Updated to match backend types
 export interface TradeTieOutDto {
-  primaryKey: string;
+  tradeTieOutId?: string;
   tradeDate: string;
-  sideAFileImport: string; // or Buffer, or file path
+  sideAFileImport?: string;
   sideAFileName: string;
-  sideBFileImport: string; // or Buffer, or file path
+  sideBFileImport?: string;
   sideBFileName: string;
-  user: string;
-  systemTimestamp: string;
-  keyMatrix: Record<string, string>; // or Array<{ a: string, b: string }>
+  userName: string;
+  systemTimestamp?: string;
+  keyMatrix: Record<string, string>;
+  createdDate?: string;
+  modifiedDate?: string;
 }
 
-// Child DTO
+// Child DTO - Updated to match backend types
 export interface TradeTieOutResultDto {
-  primaryKey: string;
-  parentKey: string;
+  tradeTieOutResultId?: string;
+  ttoTradeTieOutId: string;
   tradeId: string;
   product: string;
   volume: string;
   price: string;
   counterparty: string;
   internalCompany: string;
-  status: string;
-  user: string;
-  systemDate: string;
+  status: 'matched' | 'discrepancy' | 'pending';
+  userName: string;
+  systemDate?: string;
+  createdDate?: string;
+  modifiedDate?: string;
 }
 
 export default function Trading() {
@@ -307,12 +313,13 @@ export default function Trading() {
     tradeDate: '',
     sideAFileName: '',
     sideBFileName: '',
-    user: 'current-user', // This should come from auth context
+    userName: 'current-user', // This should come from auth context
     keyMatrix: {}
   })
   
   const [tradeTieOuts, setTradeTieOuts] = useState<TradeTieOutDto[]>([])
   const [tradeTieOutResults, setTradeTieOutResults] = useState<TradeTieOutResultDto[]>([])
+  const [tradeTieOutSummaries, setTradeTieOutSummaries] = useState<TradeTieOutSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   // Load trade tie-out data on component mount
@@ -323,95 +330,11 @@ export default function Trading() {
   const loadTradeTieOutData = async () => {
     setIsLoading(true)
     try {
-      // TODO: Replace with actual API calls
-      // const response = await fetch('/api/trade-tieouts')
-      // const data = await response.json()
-      // setTradeTieOuts(data.tieOuts)
-      // setTradeTieOutResults(data.results)
-      
-      // For now, using mock data structure that matches our DTOs
-      const mockTieOuts: TradeTieOutDto[] = [
-        {
-          primaryKey: '1',
-          tradeDate: '2024-01-15',
-          sideAFileImport: '',
-          sideAFileName: 'trader_records_2024-01-15.xlsx',
-          sideBFileImport: '',
-          sideBFileName: 'risk_records_2024-01-15.xlsx',
-          user: 'john.doe',
-          systemTimestamp: '2024-01-15T10:30:00Z',
-          keyMatrix: { 'Trade ID': 'Trade ID', 'Product': 'Commodity', 'Volume': 'Quantity' }
-        },
-        {
-          primaryKey: '2',
-          tradeDate: '2024-01-14',
-          sideAFileImport: '',
-          sideAFileName: 'trader_records_2024-01-14.xlsx',
-          sideBFileImport: '',
-          sideBFileName: 'risk_records_2024-01-14.xlsx',
-          user: 'jane.smith',
-          systemTimestamp: '2024-01-14T09:15:00Z',
-          keyMatrix: { 'Trade ID': 'Trade ID', 'Product': 'Commodity', 'Volume': 'Quantity' }
-        }
-      ]
-
-      const mockResults: TradeTieOutResultDto[] = [
-        {
-          primaryKey: '1',
-          parentKey: '1',
-          tradeId: 'TRADE-001',
-          product: 'Crude Oil',
-          volume: '1000 barrels',
-          price: '$85.50',
-          counterparty: 'Shell Trading',
-          internalCompany: 'Exodus Energy',
-          status: 'matched',
-          user: 'john.doe',
-          systemDate: '2024-01-15T10:30:00Z'
-        },
-        {
-          primaryKey: '2',
-          parentKey: '1',
-          tradeId: 'TRADE-002',
-          product: 'Natural Gas',
-          volume: '500 MMBtu',
-          price: '$3.20',
-          counterparty: 'BP Energy',
-          internalCompany: 'Exodus Energy',
-          status: 'discrepancy',
-          user: 'john.doe',
-          systemDate: '2024-01-15T10:30:00Z'
-        },
-        {
-          primaryKey: '3',
-          parentKey: '1',
-          tradeId: 'TRADE-003',
-          product: 'Electricity',
-          volume: '2000 MWh',
-          price: '$65.80',
-          counterparty: 'ExxonMobil',
-          internalCompany: 'Exodus Energy',
-          status: 'pending',
-          user: 'john.doe',
-          systemDate: '2024-01-15T10:30:00Z'
-        },
-        {
-          primaryKey: '4',
-          parentKey: '2',
-          tradeId: 'TRADE-004',
-          product: 'Coal',
-          volume: '5000 tons',
-          price: '$45.20',
-          counterparty: 'Peabody Energy',
-          internalCompany: 'Exodus Energy',
-          status: 'matched',
-          user: 'jane.smith',
-          systemDate: '2024-01-14T09:15:00Z'
-        }
-      ]
-
-      setTradeTieOuts(mockTieOuts)
-      setTradeTieOutResults(mockResults)
+      // Load trade tie-out summaries from API
+      const response = await TradeTieOutApi.getTradeTieOuts()
+      if (response.success && response.data) {
+        setTradeTieOutSummaries(response.data)
+      }
     } catch (error) {
       console.error('Error loading trade tie-out data:', error)
     } finally {
@@ -419,62 +342,21 @@ export default function Trading() {
     }
   }
 
-  // Transform DTOs to the format expected by the UI
+  // Transform trade tie-out summaries to the format expected by the UI
   const transformTradeDays = (): any[] => {
-    const tradeDaysMap = new Map<string, any>()
-    
-    // Group results by parent key (trade date)
-    tradeTieOutResults.forEach(result => {
-      const parentTieOut = tradeTieOuts.find(t => t.primaryKey === result.parentKey)
-      if (!parentTieOut) return
-      
-      const dateKey = parentTieOut.tradeDate
-      
-      if (!tradeDaysMap.has(dateKey)) {
-        tradeDaysMap.set(dateKey, {
-          date: dateKey,
-          displayDate: formatDate(dateKey),
-          tieOutId: parentTieOut.primaryKey,
-          summary: {
-            totalTrades: 0,
-            matched: 0,
-            pending: 0,
-            discrepancies: 0,
-            matchRate: 0
-          },
-          trades: []
-        })
-      }
-      
-      const day = tradeDaysMap.get(dateKey)
-      day.trades.push({
-        id: result.tradeId,
-        product: result.product,
-        volume: result.volume,
-        price: result.price,
-        counterparty: result.counterparty,
-        status: result.status,
-        discrepancies: result.status === 'discrepancy' ? 1 : 0
-      })
-    })
-    
-    // Calculate summaries
-    tradeDaysMap.forEach(day => {
-      const total = day.trades.length
-      const matched = day.trades.filter((t: any) => t.status === 'matched').length
-      const pending = day.trades.filter((t: any) => t.status === 'pending').length
-      const discrepancies = day.trades.filter((t: any) => t.status === 'discrepancy').length
-      
-      day.summary = {
-        totalTrades: total,
-        matched,
-        pending,
-        discrepancies,
-        matchRate: total > 0 ? ((matched / total) * 100).toFixed(1) : 0
-      }
-    })
-    
-    return Array.from(tradeDaysMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return tradeTieOutSummaries.map(summary => ({
+      date: summary.tradeDate,
+      displayDate: formatDate(summary.tradeDate),
+      tieOutId: summary.tieOutUser, // Using tieOutUser as identifier for now
+      summary: {
+        totalTrades: summary.totalTrades,
+        matched: summary.matchedTrades,
+        pending: summary.pendingTrades,
+        discrepancies: summary.discrepancyTrades,
+        matchRate: summary.matchRate
+      },
+      trades: [] // Will be populated when details are loaded
+    }))
   }
 
   // Update current trade tie-out as user progresses
@@ -524,30 +406,28 @@ export default function Trading() {
   }
 
   // Save trade tie-out and results to backend
-  const saveTradeTieOut = async (tieOutData: TradeTieOutDto, resultsData: TradeTieOutResultDto[]) => {
+  const saveTradeTieOut = async (tieOutData: Partial<TradeTieOutDto>, resultsData: Omit<TradeTieOutResultDto, 'tradeTieOutResultId' | 'ttoTradeTieOutId' | 'systemDate' | 'createdDate' | 'modifiedDate'>[]) => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/trade-tieouts', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ tieOut: tieOutData, results: resultsData })
-      // })
+      const requestData: CreateTradeTieOutRequest = {
+        tradeDate: tieOutData.tradeDate || '',
+        sideAFileImport: tieOutData.sideAFileImport,
+        sideAFileName: tieOutData.sideAFileName || '',
+        sideBFileImport: tieOutData.sideBFileImport,
+        sideBFileName: tieOutData.sideBFileName || '',
+        userName: tieOutData.userName || 'current-user',
+        keyMatrix: tieOutData.keyMatrix || {},
+        results: resultsData
+      }
       
-      console.log('Saving trade tie-out:', tieOutData)
-      console.log('Saving results:', resultsData)
+      const response = await TradeTieOutApi.createTradeTieOut(requestData)
       
-      // For now, add to local state
-      const newTieOut = { ...tieOutData, primaryKey: Date.now().toString() }
-      setTradeTieOuts(prev => [newTieOut, ...prev])
-      
-      const newResults = resultsData.map(result => ({
-        ...result,
-        primaryKey: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        parentKey: newTieOut.primaryKey
-      }))
-      setTradeTieOutResults(prev => [...newResults, ...prev])
-      
-      return newTieOut
+      if (response.success && response.data) {
+        // Refresh the trade tie-out summaries
+        await loadTradeTieOutData()
+        return response.data.tieOut
+      } else {
+        throw new Error(response.message || 'Failed to save trade tie-out')
+      }
     } catch (error) {
       console.error('Error saving trade tie-out:', error)
       throw error
@@ -765,18 +645,15 @@ export default function Trading() {
         } as TradeTieOutDto
         
         // Create the trade tie-out result DTOs
-        const resultsData: TradeTieOutResultDto[] = comparedTrades.map((trade, index) => ({
-          primaryKey: '', // Will be generated by backend
-          parentKey: '', // Will be set after parent is saved
+        const resultsData: Omit<TradeTieOutResultDto, 'tradeTieOutResultId' | 'ttoTradeTieOutId' | 'systemDate' | 'createdDate' | 'modifiedDate'>[] = comparedTrades.map((trade, index) => ({
           tradeId: trade[keyA[0]] || `TRADE-${index + 1}`, // Use first key column as trade ID
           product: trade[keyA.find(col => /product|commodity/i.test(col)) || keyA[0]] || '',
           volume: trade[keyA.find(col => /volume|quantity/i.test(col)) || keyA[1]] || '',
           price: trade[keyA.find(col => /price|rate/i.test(col)) || keyA[2]] || '',
           counterparty: trade[keyA.find(col => /counterparty|client/i.test(col)) || keyA[3]] || '',
           internalCompany: 'Exodus Energy', // Default value
-          status: trade.status,
-          user: currentTradeTieOut.user || 'current-user',
-          systemDate: new Date().toISOString()
+          status: trade.status as 'matched' | 'discrepancy' | 'pending',
+          userName: currentTradeTieOut.userName || 'current-user'
         }))
         
         // Save to backend
@@ -794,7 +671,7 @@ export default function Trading() {
           tradeDate: '',
           sideAFileName: '',
           sideBFileName: '',
-          user: 'current-user',
+          userName: 'current-user',
           keyMatrix: {}
         })
         setKeyMatrix([])
@@ -1362,11 +1239,11 @@ export default function Trading() {
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center justify-between text-xs text-dark-400 border-t border-dark-700 pt-3">
-                              <div className="flex items-center space-x-4">
-                                <span>Compared by: <span className="text-white font-medium">{tieOut.user}</span></span>
-                                <span>Validated: <span className="text-white font-medium">{new Date(tieOut.systemTimestamp).toLocaleString()}</span></span>
-                              </div>
+                                                          <div className="flex items-center justify-between text-xs text-dark-400 border-t border-dark-700 pt-3">
+                                <div className="flex items-center space-x-4">
+                                  <span>Compared by: <span className="text-white font-medium">{tieOut.userName}</span></span>
+                                  <span>Validated: <span className="text-white font-medium">{tieOut.systemTimestamp ? new Date(tieOut.systemTimestamp).toLocaleString() : 'N/A'}</span></span>
+                                </div>
                               <div className="flex items-center space-x-2">
                                 <span>Key mappings: <span className="text-white font-medium">{Object.keys(tieOut.keyMatrix).length}</span></span>
                               </div>

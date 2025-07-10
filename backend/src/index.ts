@@ -16,6 +16,7 @@ import { authRoutes } from './routes/auth';
 import { tradingRoutes } from './routes/trading';
 import { analyticsRoutes } from './routes/analytics';
 import { dashboardRoutes } from './routes/dashboard';
+import tradeTieOutRoutes from './routes/tradeTieOut';
 import { initializeDatabase } from './database/init';
 import { setupWebSocket } from './websocket/setup';
 
@@ -95,6 +96,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/trading', tradingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api', tradeTieOutRoutes);
 
 // Serve static files in production
 if (process.env['NODE_ENV'] === 'production') {

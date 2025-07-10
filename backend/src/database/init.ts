@@ -154,6 +154,9 @@ async function createTables(): Promise<void> {
       )
     `);
 
+    // Create trade tie-out tables
+    await createTradeTieOutTables(connection);
+
     await connection.commit();
     logger.info('All database tables created successfully');
 
@@ -167,6 +170,132 @@ async function createTables(): Promise<void> {
     }
   } finally {
     await connection.close();
+  }
+}
+
+async function createTradeTieOutTables(connection: oracledb.Connection): Promise<void> {
+  try {
+    // Create sequences
+    await connection.execute(`
+      CREATE SEQUENCE TRADE_TIE_OUTS_SEQ 
+      MINVALUE 1 MAXVALUE 9999999999999999999999999999 
+      INCREMENT BY 1 START WITH 1 NOCACHE ORDER NOCYCLE NOKEEP NOSCALE GLOBAL
+    `);
+    
+    await connection.execute(`
+      CREATE SEQUENCE TRADE_TIE_OUT_RESULTS_SEQ 
+      MINVALUE 1 MAXVALUE 9999999999999999999999999999 
+      INCREMENT BY 1 START WITH 1 NOCACHE ORDER NOCYCLE NOKEEP NOSCALE GLOBAL
+    `);
+
+    // Create TRADE_TIE_OUTS table
+    await connection.execute(`
+      CREATE TABLE TRADE_TIE_OUTS (
+        TRADE_TIE_OUT_ID VARCHAR2(50) DEFAULT ON NULL TRADE_TIE_OUTS_SEQ.NEXTVAL NOT NULL ENABLE,
+        TRADE_DATE DATE NOT NULL,
+        SIDE_A_FILE_IMPORT CLOB,
+        SIDE_A_FILE_NAME VARCHAR2(255) NOT NULL,
+        SIDE_B_FILE_IMPORT CLOB,
+        SIDE_B_FILE_NAME VARCHAR2(255) NOT NULL,
+        USER_NAME VARCHAR2(100) NOT NULL,
+        SYSTEM_TIMESTAMP TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+        KEY_MATRIX CLOB,
+        CREATED_DATE TIMESTAMP DEFAULT SYSTIMESTAMP,
+        MODIFIED_DATE TIMESTAMP DEFAULT SYSTIMESTAMP,
+        CONSTRAINT PK_TRADE_TIE_OUTS PRIMARY KEY (TRADE_TIE_OUT_ID)
+      )
+    `);
+
+    // Create TRADE_TIE_OUT_RESULTS table
+    await connection.execute(`
+      CREATE TABLE TRADE_TIE_OUT_RESULTS (
+        TRADE_TIE_OUT_RESULT_ID VARCHAR2(50) DEFAULT ON NULL TRADE_TIE_OUT_RESULTS_SEQ.NEXTVAL NOT NULL ENABLE,
+        TTO_TRADE_TIE_OUT_ID VARCHAR2(50) NOT NULL,
+        TRADE_ID VARCHAR2(100) NOT NULL,
+        PRODUCT VARCHAR2(200),
+        VOLUME VARCHAR2(100),
+        PRICE VARCHAR2(50),
+        COUNTERPARTY VARCHAR2(200),
+        INTERNAL_COMPANY VARCHAR2(200),
+        STATUS VARCHAR2(20) NOT NULL,
+        USER_NAME VARCHAR2(100) NOT NULL,
+        SYSTEM_DATE TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+        CREATED_DATE TIMESTAMP DEFAULT SYSTIMESTAMP,
+        MODIFIED_DATE TIMESTAMP DEFAULT SYSTIMESTAMP,
+        CONSTRAINT PK_TRADE_TIE_OUT_RESULTS PRIMARY KEY (TRADE_TIE_OUT_RESULT_ID),
+        CONSTRAINT FK_TRADE_RESULTS_PARENT FOREIGN KEY (TTO_TRADE_TIE_OUT_ID) 
+          REFERENCES TRADE_TIE_OUTS(TRADE_TIE_OUT_ID) ON DELETE CASCADE,
+        CONSTRAINT CK_TRADE_STATUS CHECK (STATUS IN ('matched', 'discrepancy', 'pending'))
+      )
+    `);
+
+    // Create indexes
+    await connection.execute('CREATE INDEX IDX_TRADE_TIE_OUTS_DATE ON TRADE_TIE_OUTS(TRADE_DATE)');
+    await connection.execute('CREATE INDEX IDX_TRADE_TIE_OUTS_USER ON TRADE_TIE_OUTS(USER_NAME)');
+    await connection.execute('CREATE INDEX IDX_TRADE_TIE_OUTS_TIMESTAMP ON TRADE_TIE_OUTS(SYSTEM_TIMESTAMP)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_PARENT ON TRADE_TIE_OUT_RESULTS(TTO_TRADE_TIE_OUT_ID)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_TRADE_ID ON TRADE_TIE_OUT_RESULTS(TRADE_ID)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_STATUS ON TRADE_TIE_OUT_RESULTS(STATUS)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_COUNTERPARTY ON TRADE_TIE_OUT_RESULTS(COUNTERPARTY)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_PRODUCT ON TRADE_TIE_OUT_RESULTS(PRODUCT)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_USER ON TRADE_TIE_OUT_RESULTS(USER_NAME)');
+    await connection.execute('CREATE INDEX IDX_TRADE_RESULTS_DATE ON TRADE_TIE_OUT_RESULTS(SYSTEM_DATE)');
+
+    // Create views
+    await connection.execute(`
+      CREATE OR REPLACE VIEW V_TRADE_TIE_OUT_SUMMARY AS
+      SELECT 
+        t.TRADE_DATE,
+        t.USER_NAME as TIE_OUT_USER,
+        t.SYSTEM_TIMESTAMP,
+        COUNT(r.TRADE_TIE_OUT_RESULT_ID) as TOTAL_TRADES,
+        SUM(CASE WHEN r.STATUS = 'matched' THEN 1 ELSE 0 END) as MATCHED_TRADES,
+        SUM(CASE WHEN r.STATUS = 'pending' THEN 1 ELSE 0 END) as PENDING_TRADES,
+        SUM(CASE WHEN r.STATUS = 'discrepancy' THEN 1 ELSE 0 END) as DISCREPANCY_TRADES,
+        CASE 
+          WHEN COUNT(r.TRADE_TIE_OUT_RESULT_ID) > 0 
+          THEN ROUND((SUM(CASE WHEN r.STATUS = 'matched' THEN 1 ELSE 0 END) / COUNT(r.TRADE_TIE_OUT_RESULT_ID)) * 100, 1)
+          ELSE 0 
+        END as MATCH_RATE
+      FROM TRADE_TIE_OUTS t
+      LEFT JOIN TRADE_TIE_OUT_RESULTS r ON t.TRADE_TIE_OUT_ID = r.TTO_TRADE_TIE_OUT_ID
+      GROUP BY t.TRADE_DATE, t.USER_NAME, t.SYSTEM_TIMESTAMP
+      ORDER BY t.TRADE_DATE DESC, t.SYSTEM_TIMESTAMP DESC
+    `);
+
+    await connection.execute(`
+      CREATE OR REPLACE VIEW V_TRADE_DETAILS AS
+      SELECT 
+        r.TRADE_TIE_OUT_RESULT_ID,
+        r.TRADE_ID,
+        r.PRODUCT,
+        r.VOLUME,
+        r.PRICE,
+        r.COUNTERPARTY,
+        r.INTERNAL_COMPANY,
+        r.STATUS,
+        r.USER_NAME,
+        r.SYSTEM_DATE,
+        t.TRADE_DATE,
+        t.SIDE_A_FILE_NAME,
+        t.SIDE_B_FILE_NAME,
+        t.USER_NAME as TIE_OUT_USER,
+        t.SYSTEM_TIMESTAMP as TIE_OUT_TIMESTAMP
+      FROM TRADE_TIE_OUT_RESULTS r
+      JOIN TRADE_TIE_OUTS t ON r.TTO_TRADE_TIE_OUT_ID = t.TRADE_TIE_OUT_ID
+      ORDER BY t.TRADE_DATE DESC, r.SYSTEM_DATE DESC
+    `);
+
+    logger.info('Trade tie-out tables created successfully');
+
+  } catch (error: any) {
+    // If table already exists, that's fine
+    if (error.code === 955) { // ORA-00955: name is already being used by an existing object
+      logger.info('Trade tie-out tables already exist, skipping creation');
+    } else {
+      logger.error('Error creating trade tie-out tables:', error);
+      throw error;
+    }
   }
 }
 
